@@ -2618,13 +2618,23 @@ function obtenerTodoLocalStorage() {
   return datos;
 }
 
-async function fetchGAS(url, params) {
-  const qs = Object.entries(params).map(([k,v]) =>
-    k + '=' + encodeURIComponent(typeof v === 'object' ? JSON.stringify(v) : v)
-  ).join('&');
-  const resp = await fetch(url + '?' + qs, { redirect: 'follow' });
-  const text = await resp.text();
-  return JSON.parse(text);
+function fetchGAS(url, params) {
+  return new Promise((resolve, reject) => {
+    const cb = '_gascb_' + Date.now();
+    params.callback = cb;
+    const qs = Object.entries(params).map(([k,v]) =>
+      k + '=' + encodeURIComponent(typeof v === 'object' ? JSON.stringify(v) : v)
+    ).join('&');
+    window[cb] = (data) => {
+      resolve(data);
+      delete window[cb];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+    const script = document.createElement('script');
+    script.src = url + '?' + qs;
+    script.onerror = () => { reject(new Error('No se pudo conectar')); delete window[cb]; };
+    document.head.appendChild(script);
+  });
 }
 
 async function guardarEnNube() {
