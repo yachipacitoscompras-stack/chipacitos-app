@@ -2618,32 +2618,13 @@ function obtenerTodoLocalStorage() {
   return datos;
 }
 
-function fetchGAS(url, payload) {
-  return new Promise((resolve, reject) => {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    form.target = '_gas_iframe_' + Date.now();
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'payload';
-    input.value = JSON.stringify(payload);
-    form.appendChild(input);
-    const iframe = document.createElement('iframe');
-    iframe.name = form.target;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    document.body.appendChild(form);
-    iframe.onload = () => {
-      try {
-        const text = iframe.contentDocument.body.innerText;
-        resolve(JSON.parse(text));
-      } catch(e) { reject(e); }
-      finally { document.body.removeChild(iframe); document.body.removeChild(form); }
-    };
-    iframe.onerror = reject;
-    form.submit();
-  });
+async function fetchGAS(url, params) {
+  const qs = Object.entries(params).map(([k,v]) =>
+    k + '=' + encodeURIComponent(typeof v === 'object' ? JSON.stringify(v) : v)
+  ).join('&');
+  const resp = await fetch(url + '?' + qs, { redirect: 'follow' });
+  const text = await resp.text();
+  return JSON.parse(text);
 }
 
 async function guardarEnNube() {
