@@ -1,0 +1,24 @@
+{
+  "name": "YA! Chipacitos — Fábrica",
+  "short_name": "YA! Chipacitos",
+  "description": "Gestión de stock, pedidos y cálculos de fábrica",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#CC3300",
+  "theme_color": "#CC3300",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
