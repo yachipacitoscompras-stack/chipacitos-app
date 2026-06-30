@@ -1579,17 +1579,17 @@
     <div id="conexion-status-deposito" style="margin-top:10px;"></div>
   </div>
 
-  <!-- ══ SYNC NUBE ══ -->
+  <!-- ══ SYNC ══ -->
   <div class="card">
     <div class="card-header">
-      <div class="card-icon">☁️</div>
-      <div><div class="card-title">Sincronización entre dispositivos</div><div class="card-sub">Guardá y cargá todos tus datos desde la nube</div></div>
+      <div class="card-icon">🔄</div>
+      <div><div class="card-title">Sincronización entre dispositivos</div><div class="card-sub">Exportá tus datos y cargalos en otro dispositivo</div></div>
     </div>
-    <div class="field"><label>URL del Script de Sincronización</label><input type="text" id="gs_url_sync" placeholder="https://script.google.com/macros/s/..."></div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Exportá un archivo desde este dispositivo, mandalo por WhatsApp o email, e importalo en el otro.</p>
     <div class="actions">
-      <button class="btn btn-verde" onclick="guardarEnNube()">☁️ Guardar en la nube</button>
-      <button class="btn btn-primary" onclick="cargarDesdeNube()">📥 Cargar desde la nube</button>
-      <button class="btn btn-ghost btn-sm" onclick="guardarConfigSync()">💾 Guardar URL</button>
+      <button class="btn btn-verde" onclick="exportarDatos()">⬇️ Exportar datos</button>
+      <button class="btn btn-primary" onclick="document.getElementById('importar-input').click()">⬆️ Importar datos</button>
+      <input type="file" id="importar-input" accept=".json" style="display:none" onchange="importarDatos(this)">
     </div>
     <div id="sync-status" style="margin-top:10px;"></div>
   </div>
@@ -2600,13 +2600,6 @@ function copiarScript() {
 
 // ══ SINCRONIZACIÓN EN NUBE ══
 
-function guardarConfigSync() {
-  const url = document.getElementById('gs_url_sync').value.trim();
-  if (!url) return toast('⚠️ Ingresá la URL del script');
-  localStorage.setItem('yachipacitos_gs_url_sync', url);
-  toast('💾 URL de sync guardada');
-}
-
 function obtenerTodoLocalStorage() {
   const datos = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -2618,67 +2611,39 @@ function obtenerTodoLocalStorage() {
   return datos;
 }
 
-function fetchGAS(url, params) {
-  return new Promise((resolve, reject) => {
-    const cb = '_gascb_' + Date.now();
-    params.callback = cb;
-    const qs = Object.entries(params).map(([k,v]) =>
-      k + '=' + encodeURIComponent(typeof v === 'object' ? JSON.stringify(v) : v)
-    ).join('&');
-    window[cb] = (data) => {
-      resolve(data);
-      delete window[cb];
-      if (script.parentNode) script.parentNode.removeChild(script);
-    };
-    const script = document.createElement('script');
-    script.src = url + '?' + qs;
-    script.onerror = () => { reject(new Error('No se pudo conectar')); delete window[cb]; };
-    document.head.appendChild(script);
-  });
+function exportarDatos() {
+  const datos = obtenerTodoLocalStorage();
+  const json = JSON.stringify({ version: 1, fecha: new Date().toISOString(), datos }, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'chipacitos-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('sync-status').innerHTML =
+    '<div class="alerta alerta-ok">✅ Archivo exportado — mandalo por WhatsApp o email al otro dispositivo</div>';
 }
 
-async function guardarEnNube() {
-  const url = localStorage.getItem('yachipacitos_gs_url_sync');
+function importarDatos(input) {
+  const file = input.files[0];
+  if (!file) return;
   const el = document.getElementById('sync-status');
-  if (!url) {
-    el.innerHTML = '<div class="alerta alerta-peligro">⚠️ Primero guardá la URL del script de sincronización</div>';
-    return;
-  }
-  el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Guardando en la nube...</div>';
-  try {
-    const datos = obtenerTodoLocalStorage();
-    const json = await fetchGAS(url, { tipo: 'sync_guardar', datos });
-    if (json.ok) {
-      el.innerHTML = '<div class="alerta alerta-ok">✅ Datos guardados en la nube — ' + new Date().toLocaleTimeString('es') + '</div>';
-    } else {
-      el.innerHTML = '<div class="alerta alerta-peligro">❌ Error: ' + (json.error || 'desconocido') + '</div>';
-    }
-  } catch(e) {
-    el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
-  }
-}
-
-async function cargarDesdeNube() {
-  const url = localStorage.getItem('yachipacitos_gs_url_sync');
-  const el = document.getElementById('sync-status');
-  if (!url) {
-    el.innerHTML = '<div class="alerta alerta-peligro">⚠️ Primero guardá la URL del script de sincronización</div>';
-    return;
-  }
-  if (!confirm('⚠️ Esto va a reemplazar todos tus datos locales con los de la nube. ¿Continuar?')) return;
-  el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Cargando desde la nube...</div>';
-  try {
-    const json = await fetchGAS(url, { tipo: 'sync_leer' });
-    if (json.ok && json.datos) {
-      Object.entries(json.datos).forEach(([k, v]) => localStorage.setItem(k, v));
-      el.innerHTML = '<div class="alerta alerta-ok">✅ Datos cargados. Recargando app...</div>';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const backup = JSON.parse(e.target.result);
+      if (!backup.datos) throw new Error('Archivo inválido');
+      if (!confirm('⚠️ Esto va a reemplazar todos tus datos locales. ¿Continuar?')) return;
+      Object.entries(backup.datos).forEach(([k, v]) => localStorage.setItem(k, v));
+      el.innerHTML = '<div class="alerta alerta-ok">✅ Datos importados correctamente. Recargando...</div>';
       setTimeout(() => location.reload(), 1500);
-    } else {
-      el.innerHTML = '<div class="alerta alerta-peligro">❌ ' + (json.error || 'No hay datos guardados aún') + '</div>';
+    } catch(err) {
+      el.innerHTML = '<div class="alerta alerta-peligro">❌ Error al importar: ' + err.message + '</div>';
     }
-  } catch(e) {
-    el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
-  }
+  };
+  reader.readAsText(file);
+  input.value = '';
 }
 
 // ── REGISTRAR EN GOOGLE DRIVE ──
