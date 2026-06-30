@@ -1579,6 +1579,21 @@
     <div id="conexion-status-deposito" style="margin-top:10px;"></div>
   </div>
 
+  <!-- ══ SYNC NUBE ══ -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon">☁️</div>
+      <div><div class="card-title">Sincronización entre dispositivos</div><div class="card-sub">Guardá y cargá todos tus datos desde la nube</div></div>
+    </div>
+    <div class="field"><label>URL del Script de Sincronización</label><input type="text" id="gs_url_sync" placeholder="https://script.google.com/macros/s/..."></div>
+    <div class="actions">
+      <button class="btn btn-verde" onclick="guardarEnNube()">☁️ Guardar en la nube</button>
+      <button class="btn btn-primary" onclick="cargarDesdeNube()">📥 Cargar desde la nube</button>
+      <button class="btn btn-ghost btn-sm" onclick="guardarConfigSync()">💾 Guardar URL</button>
+    </div>
+    <div id="sync-status" style="margin-top:10px;"></div>
+  </div>
+
   <div class="card">
     <div class="card-header">
       <div class="card-icon">📜</div>
@@ -2583,6 +2598,78 @@ function copiarScript() {
   navigator.clipboard.writeText(text).then(() => toast('📋 Script copiado'));
 }
 
+// ══ SINCRONIZACIÓN EN NUBE ══
+
+function guardarConfigSync() {
+  const url = document.getElementById('gs_url_sync').value.trim();
+  if (!url) return toast('⚠️ Ingresá la URL del script');
+  localStorage.setItem('yachipacitos_gs_url_sync', url);
+  toast('💾 URL de sync guardada');
+}
+
+function obtenerTodoLocalStorage() {
+  const datos = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('yachipacitos_') && k !== 'yachipacitos_gs_url_sync') {
+      datos[k] = localStorage.getItem(k);
+    }
+  }
+  return datos;
+}
+
+async function guardarEnNube() {
+  const url = localStorage.getItem('yachipacitos_gs_url_sync');
+  const el = document.getElementById('sync-status');
+  if (!url) {
+    el.innerHTML = '<div class="alerta alerta-peligro">⚠️ Primero guardá la URL del script de sincronización</div>';
+    return;
+  }
+  el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Guardando en la nube...</div>';
+  try {
+    const datos = obtenerTodoLocalStorage();
+    const resp = await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'sync_guardar', datos }),
+    });
+    const json = await resp.json();
+    if (json.ok) {
+      el.innerHTML = '<div class="alerta alerta-ok">✅ Datos guardados en la nube correctamente — ' + new Date().toLocaleTimeString('es') + '</div>';
+    } else {
+      el.innerHTML = '<div class="alerta alerta-peligro">❌ Error: ' + (json.error || 'desconocido') + '</div>';
+    }
+  } catch(e) {
+    el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
+  }
+}
+
+async function cargarDesdeNube() {
+  const url = localStorage.getItem('yachipacitos_gs_url_sync');
+  const el = document.getElementById('sync-status');
+  if (!url) {
+    el.innerHTML = '<div class="alerta alerta-peligro">⚠️ Primero guardá la URL del script de sincronización</div>';
+    return;
+  }
+  if (!confirm('⚠️ Esto va a reemplazar todos tus datos locales con los de la nube. ¿Continuar?')) return;
+  el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Cargando desde la nube...</div>';
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'sync_leer' }),
+    });
+    const json = await resp.json();
+    if (json.ok && json.datos) {
+      Object.entries(json.datos).forEach(([k, v]) => localStorage.setItem(k, v));
+      el.innerHTML = '<div class="alerta alerta-ok">✅ Datos cargados. Recargando app...</div>';
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      el.innerHTML = '<div class="alerta alerta-peligro">❌ ' + (json.error || 'No hay datos guardados aún') + '</div>';
+    }
+  } catch(e) {
+    el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
+  }
+}
+
 // ── REGISTRAR EN GOOGLE DRIVE ──
 // Proveedores de materia prima vs insumos (para determinar la hoja)
 const PROVEEDORES_MATERIA_PRIMA = ['GLOBAL','MONTECARLO','HUEVO CAMPO','MESO','MP DISTRIBUIDORA','ALBOR','TOME CAFE','NUEVO MAYORISTA','MILKAUT'];
@@ -2775,6 +2862,10 @@ try {
   const gsSheetDepEl   = document.getElementById('gs_sheet_id_deposito');
   if(savedUrlDep   && gsUrlDepEl)   gsUrlDepEl.value   = savedUrlDep;
   if(savedSheetDep && gsSheetDepEl) gsSheetDepEl.value = savedSheetDep;
+
+  const savedUrlSync = localStorage.getItem('yachipacitos_gs_url_sync');
+  const gsUrlSyncEl  = document.getElementById('gs_url_sync');
+  if(savedUrlSync && gsUrlSyncEl) gsUrlSyncEl.value = savedUrlSync;
 } catch(e) { console.warn('Init admin:', e); }
 
 // ═══════════════════════════════════════════════
