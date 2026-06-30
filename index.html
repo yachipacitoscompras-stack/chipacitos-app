@@ -342,20 +342,33 @@
   .iview.active { display: block; }
 
   /* ══ RESPONSIVE ══ */
+  .hamburger { display: none; }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 99; }
+  .topbar-theme-mobile { display: none; }
   @media(max-width: 768px) {
     .sidebar { transform: translateX(-100%); transition: transform 0.25s; }
     .sidebar.open { transform: translateX(0); }
+    .sidebar-overlay.open { display: block; }
     .app-right { margin-left: 0; }
     .main { padding: 16px 12px; }
+    .hamburger {
+      display: flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--bg-secondary); border: 1px solid var(--border-md);
+      color: var(--text-primary); font-size: 18px; cursor: pointer;
+      flex-shrink: 0; margin-right: 10px;
+    }
+    .topbar-theme-mobile { display: flex; }
   }
 </style>
 </head>
 <body>
 
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <div class="app-wrapper">
 
 <!-- ══ SIDEBAR ══ -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="sb-logo">
     <div class="sb-badge">YA!✓</div>
     <div>
@@ -389,12 +402,14 @@
 <!-- ══ CONTENIDO DERECHO ══ -->
 <div class="app-right">
   <div class="topbar">
-    <div>
+    <button class="hamburger" onclick="toggleSidebar()"><i class="ti ti-menu-2"></i></button>
+    <div style="flex:1;min-width:0;">
       <div class="topbar-title" id="topbar-title">📦 Stock</div>
       <div class="topbar-sub" id="topbar-sub">Módulo de Stock — cargá el inventario actual</div>
     </div>
     <div class="topbar-right">
       <div class="topbar-chip"><i class="ti ti-calendar" style="font-size:13px;"></i>&nbsp;<span id="topbar-date"></span></div>
+      <button class="theme-toggle topbar-theme-mobile" onclick="toggleTheme()" title="Modo claro/oscuro"><i id="themeIconMobile" class="ti ti-moon"></i></button>
     </div>
   </div>
 
@@ -1901,6 +1916,7 @@ function goTab(id) {
   if (t) t.textContent = info.title || '';
   if (s) s.textContent = info.sub || '';
   if (id === 'deposito') switchDepTab('stock');
+  closeSidebar();
 }
 
 function toggleTheme() {
@@ -1911,6 +1927,20 @@ function toggleTheme() {
   localStorage.setItem('yachipacitos_theme', next);
   const icon = document.getElementById('themeIcon');
   if (icon) icon.className = next === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
+  const iconMobile = document.getElementById('themeIconMobile');
+  if (iconMobile) iconMobile.className = next === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('open');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
 // Init tema guardado
