@@ -2612,9 +2612,20 @@ function obtenerTodoLocalStorage() {
 const SB_URL = 'https://ahlpthzsjipdpcnjbfdk.supabase.co';
 const SB_KEY = 'sb_publishable_6dpWEhLvb06ceCrHBmot0g_z79Qxgs4';
 
-async function guardarEnNube() {
+// ── Auto-sync ──
+let _syncTimer = null;
+const _lsSetItem = localStorage.setItem.bind(localStorage);
+localStorage.setItem = function(k, v) {
+  _lsSetItem(k, v);
+  if (k.startsWith('yachipacitos_')) {
+    clearTimeout(_syncTimer);
+    _syncTimer = setTimeout(() => guardarEnNube(true), 3000);
+  }
+};
+
+async function guardarEnNube(silencioso = false) {
   const el = document.getElementById('sync-status');
-  el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Guardando en la nube...</div>';
+  if (!silencioso && el) el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Guardando en la nube...</div>';
   try {
     const datos = obtenerTodoLocalStorage();
     const resp = await fetch(SB_URL + '/rest/v1/sync_data?id=eq.main', {
@@ -2627,40 +2638,44 @@ async function guardarEnNube() {
       },
       body: JSON.stringify({ datos, updated_at: new Date().toISOString() })
     });
-    if (resp.ok) {
-      el.innerHTML = '<div class="alerta alerta-ok">✅ Datos guardados en la nube — ' + new Date().toLocaleTimeString('es') + '</div>';
-    } else {
-      const err = await resp.text();
-      el.innerHTML = '<div class="alerta alerta-peligro">❌ Error: ' + err + '</div>';
+    if (el) {
+      if (resp.ok) {
+        el.innerHTML = '<div class="alerta alerta-ok">✅ Sincronizado — ' + new Date().toLocaleTimeString('es') + '</div>';
+      } else if (!silencioso) {
+        el.innerHTML = '<div class="alerta alerta-peligro">❌ Error al guardar</div>';
+      }
     }
   } catch(e) {
-    el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
+    if (el && !silencioso) el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
   }
 }
 
-async function cargarDesdeNube() {
+async function cargarDesdeNube(silencioso = false) {
   const el = document.getElementById('sync-status');
-  if (!confirm('⚠️ Esto va a reemplazar todos tus datos locales con los de la nube. ¿Continuar?')) return;
-  el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Cargando desde la nube...</div>';
+  if (!silencioso && !confirm('⚠️ Esto va a reemplazar todos tus datos locales con los de la nube. ¿Continuar?')) return;
+  if (!silencioso && el) el.innerHTML = '<div class="alerta" style="background:var(--azul-light);color:var(--azul-text);">⏳ Cargando desde la nube...</div>';
   try {
     const resp = await fetch(SB_URL + '/rest/v1/sync_data?id=eq.main&select=datos', {
-      headers: {
-        'apikey': SB_KEY,
-        'Authorization': 'Bearer ' + SB_KEY
-      }
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     });
     const json = await resp.json();
-    if (json && json[0] && json[0].datos) {
-      Object.entries(json[0].datos).forEach(([k, v]) => localStorage.setItem(k, v));
-      el.innerHTML = '<div class="alerta alerta-ok">✅ Datos cargados. Recargando...</div>';
-      setTimeout(() => location.reload(), 1500);
-    } else {
-      el.innerHTML = '<div class="alerta alerta-peligro">❌ No hay datos guardados aún en la nube</div>';
+    if (json && json[0] && json[0].datos && Object.keys(json[0].datos).length > 0) {
+      const remotos = json[0].datos;
+      Object.entries(remotos).forEach(([k, v]) => _lsSetItem(k, v));
+      if (!silencioso && el) {
+        el.innerHTML = '<div class="alerta alerta-ok">✅ Datos cargados. Recargando...</div>';
+        setTimeout(() => location.reload(), 1500);
+      }
+    } else if (!silencioso && el) {
+      el.innerHTML = '<div class="alerta alerta-peligro">❌ No hay datos en la nube aún</div>';
     }
   } catch(e) {
-    el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
+    if (el && !silencioso) el.innerHTML = '<div class="alerta alerta-peligro">❌ No se pudo conectar: ' + e.message + '</div>';
   }
 }
+
+// Carga automática al iniciar
+window.addEventListener('load', () => cargarDesdeNube(true));
 
 // ── REGISTRAR EN GOOGLE DRIVE ──
 // Proveedores de materia prima vs insumos (para determinar la hoja)
