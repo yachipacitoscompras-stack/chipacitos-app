@@ -1005,11 +1005,18 @@
     <div id="remito-status" style="margin-top:10px;"></div>
   </div>
 
-  <!-- HISTORIAL DE REMITOS (pedido activo) -->
+  <!-- REMITOS -->
   <div class="card">
     <div class="card-header">
       <div class="card-icon">📊</div>
-      <div><div class="card-title">Remitos registrados</div><div class="card-sub">Historial de tandas recibidas de Global</div></div>
+      <div><div class="card-title">Remitos registrados</div><div class="card-sub" id="remitos-sub">Mostrando remitos del pedido activo</div></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-primary btn-sm" id="btn-vista-activos" onclick="setVistaRemitos('activos')">📋 Activos</button>
+        <button class="btn btn-ghost btn-sm" id="btn-vista-todos" onclick="setVistaRemitos('todos')">🗂 Todos</button>
+      </div>
+      <input type="text" id="filtro-remitos" placeholder="Filtrar por N° o producto..." oninput="actualizarTablaRemitos()" style="flex:1;min-width:160px;padding:6px 10px;border:1px solid var(--border-md);border-radius:8px;background:var(--bg-input);color:var(--text-primary);font-size:12px;">
     </div>
     <div style="overflow-x:auto;">
       <table class="tabla" id="tabla-remitos">
@@ -1017,49 +1024,11 @@
           <tr><th>Remito</th><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Peso (kg)</th><th>Prom/caja</th><th>Precio</th><th>Subtotal</th><th>Acción</th></tr>
         </thead>
         <tbody id="remitos-body">
-          <tr><td colspan="8" style="text-align:center;color:var(--gris3);padding:20px;">Sin remitos aún</td></tr>
+          <tr><td colspan="9" style="text-align:center;color:var(--gris3);padding:20px;">Sin remitos aún</td></tr>
         </tbody>
       </table>
     </div>
-  </div>
-
-  <!-- TODOS LOS REMITOS -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-icon">🗂️</div>
-      <div><div class="card-title">Todos los remitos guardados</div><div class="card-sub">Remitos de pedidos activos y no limpiados — podés editar cada ítem</div></div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-      <input type="text" id="filtro-todos-remitos" placeholder="Filtrar por N° remito o producto..." oninput="renderTodosRemitos()" style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--border-md);border-radius:8px;background:var(--bg-input);color:var(--text-primary);font-size:13px;">
-      <button class="btn btn-ghost btn-sm" onclick="renderTodosRemitos()">🔄 Actualizar</button>
-    </div>
-    <div id="todos-remitos-contenido">
-      <div style="text-align:center;color:var(--gris3);padding:20px;font-size:13px;">Cargando...</div>
-    </div>
-  </div>
-
-  <!-- MODAL EDITAR REMITO -->
-  <div id="modal-editar-remito" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:none;align-items:center;justify-content:center;padding:16px;">
-    <div style="background:var(--bg-surface);border-radius:14px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
-      <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:16px;color:var(--rojo-dark);margin-bottom:16px;">✏️ Editar ítem de remito</div>
-      <input type="hidden" id="edit-remito-uid">
-      <div class="field"><label>Producto</label><input type="text" id="edit-remito-producto" readonly style="background:var(--bg-secondary);"></div>
-      <div class="grid2">
-        <div class="field"><label>Cantidad (cajas)</label><input type="number" id="edit-remito-cantidad" min="0" step="0.01"></div>
-        <div class="field"><label>Peso (kg)</label><input type="number" id="edit-remito-peso" min="0" step="0.01"></div>
-      </div>
-      <div class="grid2">
-        <div class="field"><label>Precio ($ / kg o unid)</label><input type="number" id="edit-remito-precio" min="0" step="0.01"></div>
-        <div class="field"><label>Subtotal ($)</label><input type="number" id="edit-remito-subtotal" min="0" step="0.01"></div>
-      </div>
-      <div class="field"><label>N° Remito</label><input type="text" id="edit-remito-numero"></div>
-      <div class="field"><label>Fecha</label><input type="date" id="edit-remito-fecha"></div>
-      <div class="actions">
-        <button class="btn btn-primary" onclick="guardarEdicionRemito()">💾 Guardar cambios</button>
-        <button class="btn btn-ghost" onclick="cerrarModalRemito()">Cancelar</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarItemRemito()">🗑 Eliminar ítem</button>
-      </div>
-    </div>
+    <div id="remitos-paginacion" style="display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap;"></div>
   </div>
 </section>
 
@@ -3325,101 +3294,20 @@ async function registrarRemito() {
 
 let remitosLocales = [];
 
-// ══ TODOS LOS REMITOS ══
+// ══ VISTA Y PAGINACIÓN DE REMITOS ══
+let _vistaRemitos = 'activos';
+let _paginaRemitos = 1;
+const _REMITOS_POR_PAG = 5; // remitos (agrupados por número)
 
-function renderTodosRemitos() {
-  const contenedor = document.getElementById('todos-remitos-contenido');
-  if (!contenedor) return;
-  const filtro = (document.getElementById('filtro-todos-remitos')?.value || '').toLowerCase();
-  const todos = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
-
-  const filtrados = todos.filter(r =>
-    !filtro ||
-    (r.numero || '').toLowerCase().includes(filtro) ||
-    (r.producto || '').toLowerCase().includes(filtro)
-  );
-
-  if (!filtrados.length) {
-    contenedor.innerHTML = '<div style="text-align:center;color:var(--gris3);padding:20px;font-size:13px;">No hay remitos guardados</div>';
-    return;
-  }
-
-  // Agrupar por N° remito
-  const porRemito = {};
-  filtrados.forEach(r => {
-    const k = r.numero || '(sin número)';
-    if (!porRemito[k]) porRemito[k] = [];
-    porRemito[k].push(r);
-  });
-
-  let html = '<div style="overflow-x:auto;"><table class="tabla"><thead><tr>' +
-    '<th>N° Remito</th><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Peso (kg)</th><th>Precio</th><th>Subtotal</th><th>Pedido</th><th>✏️</th>' +
-    '</tr></thead><tbody>';
-
-  Object.entries(porRemito).forEach(([num, items]) => {
-    items.forEach((r, i) => {
-      html += `<tr>
-        ${i === 0 ? `<td rowspan="${items.length}" style="font-weight:700;color:var(--azul-text);vertical-align:middle;">${num}</td>
-        <td rowspan="${items.length}" style="vertical-align:middle;font-size:12px;">${r.fecha || '—'}</td>` : ''}
-        <td>${r.producto || '—'}</td>
-        <td>${r.cantidad ?? '—'}</td>
-        <td>${r.peso ?? '—'}</td>
-        <td>${r.precio ? '$' + parseFloat(r.precio).toLocaleString('es-AR') : '—'}</td>
-        <td>${r.monto ? '$' + parseFloat(r.monto).toLocaleString('es-AR') : '—'}</td>
-        <td style="font-size:11px;color:var(--gris3);">${r.tipoPedido || '—'}</td>
-        <td><button class="btn btn-ghost btn-sm" onclick='abrirModalRemito(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✏️</button></td>
-      </tr>`;
-    });
-  });
-
-  html += '</tbody></table></div>';
-  contenedor.innerHTML = html;
+function setVistaRemitos(vista) {
+  _vistaRemitos = vista;
+  _paginaRemitos = 1;
+  document.getElementById('btn-vista-activos').className = 'btn btn-sm ' + (vista === 'activos' ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('btn-vista-todos').className   = 'btn btn-sm ' + (vista === 'todos'   ? 'btn-primary' : 'btn-ghost');
+  actualizarTablaRemitos();
 }
 
-function abrirModalRemito(r) {
-  document.getElementById('edit-remito-uid').value       = r.uid || '';
-  document.getElementById('edit-remito-producto').value  = r.producto || '';
-  document.getElementById('edit-remito-cantidad').value  = r.cantidad ?? '';
-  document.getElementById('edit-remito-peso').value      = r.peso ?? '';
-  document.getElementById('edit-remito-precio').value    = r.precio ?? '';
-  document.getElementById('edit-remito-subtotal').value  = r.monto ?? '';
-  document.getElementById('edit-remito-numero').value    = r.numero || '';
-  document.getElementById('edit-remito-fecha').value     = r.fecha ? r.fecha.split('/').reverse().join('-') : '';
-  const modal = document.getElementById('modal-editar-remito');
-  modal.style.display = 'flex';
-}
-
-function cerrarModalRemito() {
-  document.getElementById('modal-editar-remito').style.display = 'none';
-}
-
-function guardarEdicionRemito() {
-  const uid = document.getElementById('edit-remito-uid').value;
-  const todos = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
-  const idx = todos.findIndex(r => r.uid === uid);
-  if (idx === -1) { toast('⚠️ No se encontró el ítem'); return; }
-  todos[idx].cantidad = parseFloat(document.getElementById('edit-remito-cantidad').value) || todos[idx].cantidad;
-  todos[idx].peso     = parseFloat(document.getElementById('edit-remito-peso').value) || todos[idx].peso;
-  todos[idx].precio   = parseFloat(document.getElementById('edit-remito-precio').value) || todos[idx].precio;
-  todos[idx].monto    = parseFloat(document.getElementById('edit-remito-subtotal').value) || todos[idx].monto;
-  todos[idx].numero   = document.getElementById('edit-remito-numero').value || todos[idx].numero;
-  const fechaVal = document.getElementById('edit-remito-fecha').value;
-  if (fechaVal) todos[idx].fecha = fechaVal.split('-').reverse().join('/');
-  localStorage.setItem('yachipacitos_remitos', JSON.stringify(todos));
-  cerrarModalRemito();
-  renderTodosRemitos();
-  toast('✅ Remito actualizado');
-}
-
-function eliminarItemRemito() {
-  const uid = document.getElementById('edit-remito-uid').value;
-  if (!confirm('¿Eliminar este ítem del remito?')) return;
-  const todos = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
-  localStorage.setItem('yachipacitos_remitos', JSON.stringify(todos.filter(r => r.uid !== uid)));
-  cerrarModalRemito();
-  renderTodosRemitos();
-  toast('🗑 Ítem eliminado');
-}
+function renderTodosRemitos() { actualizarTablaRemitos(); }
 
 // Guardar remitos en localStorage para persistencia.
 // Combina los remitos en pantalla (remitosLocales = pedidos activos) con los que ya
@@ -3465,10 +3353,45 @@ function poblarSelectsPedidos() {
 
 function actualizarTablaRemitos() {
   const tbody = document.getElementById('remitos-body');
+  const filtro = (document.getElementById('filtro-remitos')?.value || '').toLowerCase();
 
-  // Mostrar solo los últimos 5 remitos (por N° único)
-  const numerosUnicos = [...new Set(remitosLocales.map(r => r.numero))].slice(-5);
-  const filasMostrar  = remitosLocales.filter(r => numerosUnicos.includes(r.numero));
+  // Fuente de datos según vista
+  let fuenteTotal;
+  if (_vistaRemitos === 'todos') {
+    fuenteTotal = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
+    const sub = document.getElementById('remitos-sub');
+    if (sub) sub.textContent = 'Todos los remitos guardados (activos y cerrados)';
+  } else {
+    fuenteTotal = remitosLocales;
+    const sub = document.getElementById('remitos-sub');
+    if (sub) sub.textContent = 'Mostrando remitos del pedido activo';
+  }
+
+  // Filtro por texto
+  const filtrados = filtro
+    ? fuenteTotal.filter(r => (r.numero||'').toLowerCase().includes(filtro) || (r.producto||'').toLowerCase().includes(filtro))
+    : fuenteTotal;
+
+  // Agrupar por número de remito para paginación
+  const numerosOrdenados = [...new Set(filtrados.map(r => r.numero))];
+  const totalPags = Math.max(1, Math.ceil(numerosOrdenados.length / _REMITOS_POR_PAG));
+  _paginaRemitos = Math.min(_paginaRemitos, totalPags);
+  const numsPagina = numerosOrdenados.slice((_paginaRemitos-1)*_REMITOS_POR_PAG, _paginaRemitos*_REMITOS_POR_PAG);
+  const filasMostrar = filtrados.filter(r => numsPagina.includes(r.numero));
+
+  // Paginación
+  const pagDiv = document.getElementById('remitos-paginacion');
+  if (pagDiv) {
+    if (totalPags <= 1) {
+      pagDiv.innerHTML = '';
+    } else {
+      pagDiv.innerHTML = Array.from({length: totalPags}, (_,i) =>
+        `<button class="btn btn-sm ${i+1===_paginaRemitos?'btn-primary':'btn-ghost'}" onclick="_paginaRemitos=${i+1};actualizarTablaRemitos()">
+          ${i+1}
+        </button>`
+      ).join('');
+    }
+  }
 
   if (!filasMostrar.length) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gris3);padding:20px;">Sin remitos aún</td></tr>';
@@ -3478,13 +3401,20 @@ function actualizarTablaRemitos() {
   // Agrupar por remito para mostrar separadores
   let htmlFilas = '';
   let remitoActual = null;
+  const esTodos = _vistaRemitos === 'todos';
 
-  filasMostrar.forEach((r, i) => {
-    const idx = remitosLocales.indexOf(r);
+  filasMostrar.forEach((r) => {
+    const uid = r.uid || '';
+    const idx = esTodos ? -1 : remitosLocales.indexOf(r);
     const subtotal = r.esPorKg ? (r.peso||0)*(r.precio||0) : (r.cantidad||0)*(r.precio||0);
     const prom = (r.esPorKg && r.cantidad > 0) ? (r.peso/r.cantidad).toFixed(2)+' kg' : '—';
+    const rowId = esTodos ? 'uid-' + uid.replace(/[^a-zA-Z0-9]/g,'_') : 'remito-fila-' + idx;
+    const subId = esTodos ? 'sub-uid-' + uid.replace(/[^a-zA-Z0-9]/g,'_') : 'sub-' + idx;
+    const fnCant  = esTodos ? `editarRemitoItemUid('${uid}','cantidad',this.value)` : `editarRemitoItem(${idx},'cantidad',this.value)`;
+    const fnPeso  = esTodos ? `editarRemitoItemUid('${uid}','peso',this.value)`     : `editarRemitoItem(${idx},'peso',this.value)`;
+    const fnPrecio= esTodos ? `editarRemitoItemUid('${uid}','precio',this.value)`   : `editarRemitoItem(${idx},'precio',this.value)`;
+    const fnGuardar = esTodos ? `guardarCambioItemUid('${uid}')` : `guardarCambioItem(${idx})`;
 
-    // Encabezado de grupo por remito
     if (r.numero !== remitoActual) {
       remitoActual = r.numero;
       htmlFilas += `<tr style="background:var(--negro);">
@@ -3492,35 +3422,34 @@ function actualizarTablaRemitos() {
           📄 REMITO ${r.numero} — ${r.fecha}${r.tipoPedido ? ' <span style="background:var(--rojo);color:white;border-radius:4px;padding:1px 6px;font-size:10px;">' + r.tipoPedido + '</span>' : ''}
         </td>
         <td colspan="2" style="text-align:right;padding:6px 12px;">
-          <button onclick="desvincularRemito('${r.numero}')" title="Lo saca de este pedido pero sigue registrado en Drive"
+          ${!esTodos ? `<button onclick="desvincularRemito('${r.numero}')"
             style="background:var(--amarillo-light);border:1.5px solid var(--amarillo);color:var(--amarillo-dark);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;margin-right:6px;">
-            ↩️ Desvincular
-          </button>
-          <button onclick="borrarRemito('${r.numero}')" title="Lo borra del historial y de Drive — no se puede recuperar"
-            style="background:var(--coral-light);border:1.5px solid var(--coral);color:var(--coral);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">
-            🗑 Borrar remito
+            ↩️ Desvincular</button>` : ''}
+          <button onclick="borrarRemitoStorage('${r.numero}')"
+            style="background:var(--rojo-light);border:1.5px solid var(--rojo);color:var(--rojo);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">
+            🗑 Borrar
           </button>
         </td>
       </tr>`;
     }
 
-    htmlFilas += `<tr id="remito-fila-${idx}">
+    htmlFilas += `<tr id="${rowId}">
       <td style="padding-left:20px;color:var(--gris3);font-size:11px;">${r.numero}</td>
-      <td>${r.fecha}</td>
+      <td>${r.fecha||'—'}</td>
       <td style="font-weight:600;">${r.producto}</td>
       <td><input type="number" value="${r.cantidad||''}" min="0"
-        onchange="editarRemitoItem(${idx},'cantidad',this.value)"
+        onchange="${fnCant}"
         style="width:60px;border:1.5px solid var(--amarillo);border-radius:6px;padding:4px 6px;font-size:13px;font-weight:700;text-align:center;background:var(--amarillo-light);color:var(--text-primary);"></td>
       <td><input type="number" value="${r.peso||''}" min="0" step="0.01"
-        onchange="editarRemitoItem(${idx},'peso',this.value)"
+        onchange="${fnPeso}"
         style="width:70px;border:1.5px solid var(--gris2);border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;background:var(--gris);color:var(--text-primary);"></td>
       <td>${prom}</td>
       <td><input type="number" value="${r.precio||''}" min="0" step="0.01"
-        onchange="editarRemitoItem(${idx},'precio',this.value)"
+        onchange="${fnPrecio}"
         style="width:80px;border:1.5px solid var(--gris2);border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;background:var(--gris);color:var(--text-primary);"></td>
-      <td style="font-weight:700;" id="sub-${idx}">$${subtotal.toLocaleString('es-AR',{minimumFractionDigits:2})}</td>
+      <td style="font-weight:700;" id="${subId}">$${subtotal.toLocaleString('es-AR',{minimumFractionDigits:2})}</td>
       <td>
-        <button onclick="guardarCambioItem(${idx})"
+        <button onclick="${fnGuardar}"
           style="background:var(--verde-light);border:1.5px solid var(--verde);color:var(--verde-dark);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">
           💾 Guardar
         </button>
@@ -3529,6 +3458,48 @@ function actualizarTablaRemitos() {
   });
 
   tbody.innerHTML = htmlFilas;
+}
+
+function editarRemitoItemUid(uid, campo, valor) {
+  const todos = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
+  const idx = todos.findIndex(r => r.uid === uid);
+  if (idx === -1) return;
+  todos[idx][campo] = parseFloat(valor) || 0;
+  const r = todos[idx];
+  const subtotal = r.esPorKg ? (r.peso||0)*(r.precio||0) : (r.cantidad||0)*(r.precio||0);
+  const subId = 'sub-uid-' + uid.replace(/[^a-zA-Z0-9]/g,'_');
+  const subEl = document.getElementById(subId);
+  if (subEl) subEl.textContent = '$' + subtotal.toLocaleString('es-AR',{minimumFractionDigits:2});
+  localStorage.setItem('yachipacitos_remitos', JSON.stringify(todos));
+  // Sincronizar también en remitosLocales si está activo
+  const idxLocal = remitosLocales.findIndex(r => r.uid === uid);
+  if (idxLocal !== -1) { remitosLocales[idxLocal][campo] = parseFloat(valor) || 0; recalcularSeguimientoDesdeRemitos(); }
+}
+
+async function guardarCambioItemUid(uid) {
+  const todos = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
+  const r = todos.find(r => r.uid === uid);
+  if (!r) return;
+  const subtotal = r.esPorKg ? (r.peso||0)*(r.precio||0) : (r.cantidad||0)*(r.precio||0);
+  toast('💾 Cambios guardados');
+  const gsUrl = localStorage.getItem('yachipacitos_gs_url');
+  if (!gsUrl) return;
+  try {
+    await fetch(gsUrl, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tipo:'editar_item_remito', remito:r.numero, producto:r.producto,
+        cantidad:r.cantidad||'', peso:r.peso||'', precio:r.precio, monto:subtotal.toFixed(2),
+        promCaja: (r.esPorKg && r.cantidad>0) ? ((r.peso||0)/r.cantidad).toFixed(2) : '' }) });
+  } catch(e) { toast('❌ Sin conexión con Drive'); }
+}
+
+function borrarRemitoStorage(numero) {
+  if (!confirm(`¿Borrar el remito ${numero} del historial local?`)) return;
+  const todos = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
+  localStorage.setItem('yachipacitos_remitos', JSON.stringify(todos.filter(r => r.numero !== numero)));
+  remitosLocales = remitosLocales.filter(r => r.numero !== numero);
+  recalcularSeguimientoDesdeRemitos();
+  actualizarTablaRemitos();
+  toast('🗑 Remito eliminado');
 }
 
 async function editarRemitoItem(idx, campo, valor) {
