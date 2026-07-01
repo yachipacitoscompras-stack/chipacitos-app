@@ -1021,7 +1021,16 @@
     <div style="overflow-x:auto;">
       <table class="tabla" id="tabla-remitos">
         <thead>
-          <tr><th>Remito</th><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Peso (kg)</th><th>Prom/caja</th><th>Precio</th><th>Subtotal</th><th>Acción</th></tr>
+          <tr>
+            <th onclick="sortRemitos('numero')" style="cursor:pointer;user-select:none;">Remito <span id="sort-numero"></span></th>
+            <th onclick="sortRemitos('fecha')" style="cursor:pointer;user-select:none;">Fecha <span id="sort-fecha"></span></th>
+            <th onclick="sortRemitos('producto')" style="cursor:pointer;user-select:none;">Producto <span id="sort-producto"></span></th>
+            <th onclick="sortRemitos('cantidad')" style="cursor:pointer;user-select:none;">Cant. <span id="sort-cantidad"></span></th>
+            <th>Peso (kg)</th><th>Prom/caja</th>
+            <th onclick="sortRemitos('precio')" style="cursor:pointer;user-select:none;">Precio <span id="sort-precio"></span></th>
+            <th onclick="sortRemitos('subtotal')" style="cursor:pointer;user-select:none;">Subtotal <span id="sort-subtotal"></span></th>
+            <th>Acción</th>
+          </tr>
         </thead>
         <tbody id="remitos-body">
           <tr><td colspan="9" style="text-align:center;color:var(--gris3);padding:20px;">Sin remitos aún</td></tr>
@@ -3297,7 +3306,8 @@ let remitosLocales = [];
 // ══ VISTA Y PAGINACIÓN DE REMITOS ══
 let _vistaRemitos = 'activos';
 let _paginaRemitos = 1;
-const _REMITOS_POR_PAG = 5; // remitos (agrupados por número)
+const _REMITOS_POR_PAG = 5;
+let _sortRemitos = { campo: 'fecha', dir: -1 }; // por defecto: fecha desc
 
 function setVistaRemitos(vista) {
   _vistaRemitos = vista;
@@ -3305,6 +3315,46 @@ function setVistaRemitos(vista) {
   document.getElementById('btn-vista-activos').className = 'btn btn-sm ' + (vista === 'activos' ? 'btn-primary' : 'btn-ghost');
   document.getElementById('btn-vista-todos').className   = 'btn btn-sm ' + (vista === 'todos'   ? 'btn-primary' : 'btn-ghost');
   actualizarTablaRemitos();
+}
+
+function sortRemitos(campo) {
+  if (_sortRemitos.campo === campo) {
+    _sortRemitos.dir *= -1;
+  } else {
+    _sortRemitos.campo = campo;
+    _sortRemitos.dir = 1;
+  }
+  _paginaRemitos = 1;
+  actualizarTablaRemitos();
+}
+
+function aplicarSortRemitos(lista) {
+  const { campo, dir } = _sortRemitos;
+  // Actualizar flechas
+  ['numero','fecha','producto','cantidad','precio','subtotal'].forEach(c => {
+    const el = document.getElementById('sort-' + c);
+    if (el) el.textContent = c === campo ? (dir === 1 ? ' ▲' : ' ▼') : '';
+  });
+  return [...lista].sort((a, b) => {
+    let va, vb;
+    if (campo === 'fecha') {
+      // Convertir DD/MM/YYYY a comparable
+      const toDate = s => { const p = (s||'').split('/'); return p.length===3 ? p[2]+p[1]+p[0] : ''; };
+      va = toDate(a.fecha); vb = toDate(b.fecha);
+    } else if (campo === 'subtotal') {
+      va = a.esPorKg ? (a.peso||0)*(a.precio||0) : (a.cantidad||0)*(a.precio||0);
+      vb = b.esPorKg ? (b.peso||0)*(b.precio||0) : (b.cantidad||0)*(b.precio||0);
+    } else if (campo === 'cantidad' || campo === 'precio') {
+      va = parseFloat(a[campo]) || 0;
+      vb = parseFloat(b[campo]) || 0;
+    } else {
+      va = (a[campo] || '').toString().toLowerCase();
+      vb = (b[campo] || '').toString().toLowerCase();
+    }
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return 0;
+  });
 }
 
 function renderTodosRemitos() { actualizarTablaRemitos(); }
@@ -3368,9 +3418,12 @@ function actualizarTablaRemitos() {
   }
 
   // Filtro por texto
-  const filtrados = filtro
+  let filtrados = filtro
     ? fuenteTotal.filter(r => (r.numero||'').toLowerCase().includes(filtro) || (r.producto||'').toLowerCase().includes(filtro))
     : fuenteTotal;
+
+  // Ordenamiento
+  filtrados = aplicarSortRemitos(filtrados);
 
   // Agrupar por número de remito para paginación
   const numerosOrdenados = [...new Set(filtrados.map(r => r.numero))];
