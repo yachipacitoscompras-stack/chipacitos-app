@@ -3826,7 +3826,9 @@ function cerrarPedidoActivo(id) {
   localStorage.setItem('yachipacitos_pedidos_cerrados', JSON.stringify(cerrados.slice(-10)));
 
   guardarPedidosPorTipo(pedido.tipo, getPedidosPorTipo(pedido.tipo).filter(p => p.id !== id));
-  limpiarRemitosDePedido(id);
+  // No se borran los remitos al cerrar — quedan disponibles para editar hasta que se limpie
+  remitosLocales = remitosLocales.filter(r => r.pedidoId !== id);
+  actualizarTablaRemitos();
   renderSeguimiento();
   toast('🗑 Pedido ' + pedido.tipo + ' (' + pedido.fecha + ') cerrado');
 }
@@ -4478,7 +4480,12 @@ function buildCanvas(pedidoId, incluirAbonar) {
   if (!pedido) return null;
   const tipo = pedido.tipo;
 
-  const remitos = remitosLocales.filter(r => r.pedidoId === pedidoId);
+  // Leer de remitosLocales (activos) o del storage completo (cerrados no limpiados)
+  let remitos = remitosLocales.filter(r => r.pedidoId === pedidoId);
+  if (!remitos.length) {
+    const todos = JSON.parse(localStorage.getItem('yachipacitos_remitos') || '[]');
+    remitos = todos.filter(r => r.pedidoId === pedidoId);
+  }
   if (!remitos.length) return null;
 
   const remitosPorNum = {};
